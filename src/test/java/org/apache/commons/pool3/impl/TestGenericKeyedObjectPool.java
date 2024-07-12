@@ -1300,53 +1300,83 @@ public class TestGenericKeyedObjectPool extends AbstractTestKeyedObjectPool {
      *
      * @throws Exception May occur in some failure modes
      */
+  
     @Test
     public void testConcurrentInvalidate() throws Exception {
-        // Get allObjects and idleObjects loaded with some instances
         final int nObjects = 1000;
         final String key = "one";
+        preparePoolForTest(nObjects, key);
+        final String[] obj = populatePoolWithObjects(nObjects, key);
+        returnHalfObjectsToPool(nObjects, key, obj);
+        final int nThreads = 20;
+        final int nIterations = 60;
+        List<Integer> targets = generateInvalidationTargets(nIterations, nObjects);
+        runConcurrentInvalidationTests(nThreads, nIterations, key, obj, targets);
+        assertEquals(nIterations, gkoPool.getDestroyedCount());
+    }
+
+    private void preparePoolForTest(int nObjects, String key) {
         gkoPool.setMaxTotal(nObjects);
         gkoPool.setMaxTotalPerKey(nObjects);
         gkoPool.setMaxIdlePerKey(nObjects);
-        final String [] obj = new String[nObjects];
+    }
+
+    private String[] populatePoolWithObjects(int nObjects, String key) throws Exception {
+        final String[] obj = new String[nObjects];
         for (int i = 0; i < nObjects; i++) {
             obj[i] = gkoPool.borrowObject(key);
         }
+        return obj;
+    }
+
+    private void returnHalfObjectsToPool(int nObjects, String key, String[] obj) throws Exception {
         for (int i = 0; i < nObjects; i++) {
             if (i % 2 == 0) {
                 gkoPool.returnObject(key, obj[i]);
             }
         }
-        final int nThreads = 20;
-        final int nIterations = 60;
-        final InvalidateThread[] threads = new InvalidateThread[nThreads];
-        // Randomly generated list of distinct invalidation targets
+    }
+
+    private List<Integer> generateInvalidationTargets(int nIterations, int nObjects) {
         final ArrayList<Integer> targets = new ArrayList<>();
         final Random random = new Random();
         for (int j = 0; j < nIterations; j++) {
-            // Get a random invalidation target
-            Integer targ = Integer.valueOf(random.nextInt(nObjects));
-            while (targets.contains(targ)) {
-                targ = Integer.valueOf(random.nextInt(nObjects));
-            }
+            Integer targ = generateUniqueTarget(nObjects, targets, random);
             targets.add(targ);
-            // Launch nThreads threads all trying to invalidate the target
+        }
+        return targets;
+    }
+
+    private Integer generateUniqueTarget(int nObjects, List<Integer> targets, Random random) {
+        Integer targ = Integer.valueOf(random.nextInt(nObjects));
+        while (targets.contains(targ)) {
+            targ = Integer.valueOf(random.nextInt(nObjects));
+        }
+        return targ;
+    }
+
+    private void runConcurrentInvalidationTests(int nThreads, int nIterations, String key, String[] obj, List<Integer> targets) throws InterruptedException {
+        final InvalidateThread[] threads = new InvalidateThread[nThreads];
+        for (int j = 0; j < nIterations; j++) {
             for (int i = 0; i < nThreads; i++) {
-                threads[i] = new InvalidateThread(gkoPool, key, obj[targ.intValue()]);
+                threads[i] = new InvalidateThread(gkoPool, key, obj[targets.get(j)]);
             }
             for (int i = 0; i < nThreads; i++) {
                 new Thread(threads[i]).start();
             }
-            boolean done = false;
-            while (!done) {
-                done = true;
-                for (int i = 0; i < nThreads; i++) {
-                    done = done && threads[i].complete();
-                }
-                Thread.sleep(100);
-            }
+            waitForThreadsToComplete(nThreads, threads);
         }
-        assertEquals(nIterations, gkoPool.getDestroyedCount());
+    }
+
+    private void waitForThreadsToComplete(int nThreads, InvalidateThread[] threads) throws InterruptedException {
+        boolean done = false;
+        while (!done) {
+            done = true;
+            for (int i = 0; i < nThreads; i++) {
+                done = done && threads[i].complete();
+            }
+            Thread.sleep(100);
+        }
     }
 
     @Test
