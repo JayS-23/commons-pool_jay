@@ -2063,8 +2063,8 @@ public class TestGenericObjectPool extends TestBaseObjectPool {
     @Timeout(value = 1000, unit = TimeUnit.MILLISECONDS)
     public void testLivenessOnTransientFactoryFailure() throws InterruptedException {
         final DisconnectingWaiterFactory<String> factory = new DisconnectingWaiterFactory<>(
-                DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_CREATE_ACTION,
-                DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_LIFECYCLE_ACTION,
+                DisconnectingWaiterFactory.DEF_CREATE_ACTION,
+                DisconnectingWaiterFactory.DEF_LIFECYCLE_ACTION,
                 obj -> false // all instances fail validation
         );
         final AtomicBoolean failed = new AtomicBoolean();
@@ -2613,8 +2613,8 @@ public class TestGenericObjectPool extends TestBaseObjectPool {
     public void testNPEOnFactoryNull() throws InterruptedException {
         final DisconnectingWaiterFactory<String> factory = new DisconnectingWaiterFactory<>(
                 () -> null, // Override default to always return null from makeObject
-                DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_LIFECYCLE_ACTION,
-                DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_VALIDATION_ACTION);
+                DisconnectingWaiterFactory.DEF_LIFECYCLE_ACTION,
+                DisconnectingWaiterFactory.DEF_VALIDATION_ACTION);
         try (GenericObjectPool<Waiter, IllegalStateException> pool = new GenericObjectPool<>(factory)) {
             pool.setTestOnBorrow(true);
             pool.setMaxTotal(-1);

@@ -37,7 +37,7 @@ public class DisconnectingWaiterFactory<K> extends WaiterFactory<K> {
      * Default function to perform for activate, passivate, destroy in disconnected
      * mode - no-op
      */
-    protected static final Consumer<PooledObject<Waiter>> DEFAULT_DISCONNECTED_LIFECYCLE_ACTION = w -> {
+    protected static final Consumer<PooledObject<Waiter>> DEF_LIFECYCLE_ACTION = w -> {
     };
 
     /**
@@ -46,7 +46,7 @@ public class DisconnectingWaiterFactory<K> extends WaiterFactory<K> {
      * duration. If maxWait is exceeded, throw ISE; if reconnect happens in time,
      * return a new DefaultPooledObject<Waiter>.
      */
-    protected static final Supplier<PooledObject<Waiter>> DEFAULT_DISCONNECTED_CREATE_ACTION = () -> {
+    protected static final Supplier<PooledObject<Waiter>> DEF_CREATE_ACTION = () -> {
         waitForConnection(null, DEFAULT_TIME_BETWEEN_CONNECTION_CHECKS, DEFAULT_MAX_WAIT);
         return new DefaultPooledObject<>(new Waiter(true, true, 0));
     };
@@ -55,7 +55,7 @@ public class DisconnectingWaiterFactory<K> extends WaiterFactory<K> {
      * Default predicate determining what validate does in disconnected state -
      * default is to always return false
      */
-    protected static final Predicate<PooledObject<Waiter>> DEFAULT_DISCONNECTED_VALIDATION_ACTION = w -> false;
+    protected static final Predicate<PooledObject<Waiter>> DEF_VALIDATION_ACTION = w -> false;
 
     /**
      * Blocks until connected or maxWait is exceeded.
@@ -110,8 +110,8 @@ public class DisconnectingWaiterFactory<K> extends WaiterFactory<K> {
     final Predicate<PooledObject<Waiter>> disconnectedValidationAction;
 
     public DisconnectingWaiterFactory() {
-        this(DEFAULT_DISCONNECTED_CREATE_ACTION, DEFAULT_DISCONNECTED_LIFECYCLE_ACTION,
-                DEFAULT_DISCONNECTED_VALIDATION_ACTION);
+        this(DEF_CREATE_ACTION, DEF_LIFECYCLE_ACTION,
+                DEF_VALIDATION_ACTION);
     }
 
     public DisconnectingWaiterFactory(final long activateLatency, final long destroyLatency,
@@ -138,9 +138,9 @@ public class DisconnectingWaiterFactory<K> extends WaiterFactory<K> {
                 passivateInvalidationProbability);
         this.timeBetweenConnectionChecks = DEFAULT_TIME_BETWEEN_CONNECTION_CHECKS;
         this.maxWait = DEFAULT_MAX_WAIT;
-        this.disconnectedCreateAction = DEFAULT_DISCONNECTED_CREATE_ACTION;
-        this.disconnectedLifcycleAction = DEFAULT_DISCONNECTED_LIFECYCLE_ACTION;
-        this.disconnectedValidationAction = DEFAULT_DISCONNECTED_VALIDATION_ACTION;
+        this.disconnectedCreateAction = DEF_CREATE_ACTION;
+        this.disconnectedLifcycleAction = DEF_LIFECYCLE_ACTION;
+        this.disconnectedValidationAction = DEF_VALIDATION_ACTION;
     }
 
     public DisconnectingWaiterFactory(final Supplier<PooledObject<Waiter>> disconnectedCreateAction,

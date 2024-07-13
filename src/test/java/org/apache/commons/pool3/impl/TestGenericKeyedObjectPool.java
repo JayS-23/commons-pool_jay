@@ -1300,7 +1300,7 @@ public class TestGenericKeyedObjectPool extends AbstractTestKeyedObjectPool {
      *
      * @throws Exception May occur in some failure modes
      */
-  
+
     @Test
     public void testConcurrentInvalidate() throws Exception {
         final int nObjects = 1000;
@@ -2448,8 +2448,8 @@ public class TestGenericKeyedObjectPool extends AbstractTestKeyedObjectPool {
         // @formatter:off
         final DisconnectingWaiterFactory<String> factory = new DisconnectingWaiterFactory<>(
             () -> null,  // Override default to always return null from makeObject
-            DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_LIFECYCLE_ACTION,
-            DisconnectingWaiterFactory.DEFAULT_DISCONNECTED_VALIDATION_ACTION
+            DisconnectingWaiterFactory.DEF_LIFECYCLE_ACTION,
+            DisconnectingWaiterFactory.DEF_VALIDATION_ACTION
         );
         // @formatter:on
         try (final GenericKeyedObjectPool<String, Waiter, RuntimeException> pool = new GenericKeyedObjectPool<>(factory)) {
