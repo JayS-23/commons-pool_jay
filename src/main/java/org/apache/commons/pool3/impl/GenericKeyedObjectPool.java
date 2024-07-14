@@ -975,8 +975,6 @@ public class GenericKeyedObjectPool<K, T, E extends Exception> extends BaseGener
         assertOpen();
 
         if (getNumIdle() > 0) {
-
-            PooledObject<T> underTest = null;
             final EvictionPolicy<T> evictionPolicy = getEvictionPolicy();
 
             synchronized (evictionLock) {
@@ -985,124 +983,128 @@ public class GenericKeyedObjectPool<K, T, E extends Exception> extends BaseGener
                         getSoftMinEvictableIdleDuration(),
                         getMinIdlePerKey());
 
-                final boolean testWhileIdle = getTestWhileIdle();
-
                 for (int i = 0, m = getNumTests(); i < m; i++) {
-                    if (evictionIterator == null || !evictionIterator.hasNext()) {
-                        if (evictionKeyIterator == null ||
-                                !evictionKeyIterator.hasNext()) {
-                            final List<K> keyCopy = new ArrayList<>();
-                            final Lock readLock = keyLock.readLock();
-                            readLock.lock();
-                            try {
-                                keyCopy.addAll(poolKeyList);
-                            } finally {
-                                readLock.unlock();
-                            }
-                            evictionKeyIterator = keyCopy.iterator();
-                        }
-                        while (evictionKeyIterator.hasNext()) {
-                            evictionKey = evictionKeyIterator.next();
-                            final ObjectDeque<T> objectDeque = poolMap.get(evictionKey);
-                            if (objectDeque == null) {
-                                continue;
-                            }
-
-                            final Deque<PooledObject<T>> idleObjects = objectDeque.getIdleObjects();
-                            evictionIterator = new EvictionIterator(idleObjects);
-                            if (evictionIterator.hasNext()) {
-                                break;
-                            }
-                            evictionIterator = null;
-                        }
-                    }
-                    if (evictionIterator == null) {
-                        // Pools exhausted
+                    if (!prepareEvictionIterator()) {
                         return;
                     }
+
+                    PooledObject<T> underTest = null;
                     final Deque<PooledObject<T>> idleObjects;
                     try {
                         underTest = evictionIterator.next();
                         idleObjects = evictionIterator.getIdleObjects();
                     } catch (final NoSuchElementException nsee) {
-                        // Object was borrowed in another thread
-                        // Don't count this as an eviction test so reduce i;
                         i--;
                         evictionIterator = null;
                         continue;
                     }
 
                     if (!underTest.startEvictionTest()) {
-                        // Object was borrowed in another thread
-                        // Don't count this as an eviction test so reduce i;
                         i--;
                         continue;
                     }
 
-                    // User provided eviction policy could throw all sorts of
-                    // crazy exceptions. Protect against such an exception
-                    // killing the eviction thread.
-                    boolean evict;
-                    try {
-                        evict = evictionPolicy.evict(evictionConfig, underTest,
-                                poolMap.get(evictionKey).getIdleObjects().size());
-                    } catch (final Throwable t) {
-                        // Slightly convoluted as SwallowedExceptionListener
-                        // uses Exception rather than Throwable
-                        PoolUtils.checkRethrow(t);
-                        swallowException(new Exception(t));
-                        // Don't evict on error conditions
-                        evict = false;
-                    }
+                    boolean evict = shouldEvict(evictionConfig, evictionPolicy, underTest);
 
                     if (evict) {
                         destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
                         destroyedByEvictorCount.incrementAndGet();
                     } else {
-                        if (testWhileIdle) {
-                            boolean active = false;
-                            try {
-                                factory.activateObject(evictionKey, underTest);
-                                active = true;
-                            } catch (final Exception e) {
-                                destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
-                                destroyedByEvictorCount.incrementAndGet();
-                            }
-                            if (active) {
-                                boolean validate = false;
-                                Throwable validationThrowable = null;
-                                try {
-                                    validate = factory.validateObject(evictionKey, underTest);
-                                } catch (final Throwable t) {
-                                    PoolUtils.checkRethrow(t);
-                                    validationThrowable = t;
-                                }
-                                if (!validate) {
-                                    destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
-                                    destroyedByEvictorCount.incrementAndGet();
-                                    if (validationThrowable != null) {
-                                        if (validationThrowable instanceof RuntimeException) {
-                                            throw (RuntimeException) validationThrowable;
-                                        }
-                                        throw (Error) validationThrowable;
-                                    }
-                                } else {
-                                    try {
-                                        factory.passivateObject(evictionKey, underTest);
-                                    } catch (final Exception e) {
-                                        destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
-                                        destroyedByEvictorCount.incrementAndGet();
-                                    }
-                                }
-                            }
-                        }
-                        underTest.endEvictionTest(idleObjects);
-                        // TODO - May need to add code here once additional
-                        // states are used
+                        handleNonEvictedObject(underTest, idleObjects);
                     }
                 }
             }
         }
+
+        handleAbandonedConfig();
+    }
+
+    private boolean prepareEvictionIterator() {
+        if (evictionIterator == null || !evictionIterator.hasNext()) {
+            if (evictionKeyIterator == null || !evictionKeyIterator.hasNext()) {
+                final List<K> keyCopy = new ArrayList<>();
+                final Lock readLock = keyLock.readLock();
+                readLock.lock();
+                try {
+                    keyCopy.addAll(poolKeyList);
+                } finally {
+                    readLock.unlock();
+                }
+                evictionKeyIterator = keyCopy.iterator();
+            }
+            while (evictionKeyIterator.hasNext()) {
+                evictionKey = evictionKeyIterator.next();
+                final ObjectDeque<T> objectDeque = poolMap.get(evictionKey);
+                if (objectDeque == null) {
+                    continue;
+                }
+
+                final Deque<PooledObject<T>> idleObjects = objectDeque.getIdleObjects();
+                evictionIterator = new EvictionIterator(idleObjects);
+                if (evictionIterator.hasNext()) {
+                    break;
+                }
+                evictionIterator = null;
+            }
+        }
+        return evictionIterator != null;
+    }
+
+    private boolean shouldEvict(EvictionConfig evictionConfig, EvictionPolicy<T> evictionPolicy, PooledObject<T> underTest) {
+        boolean evict;
+        try {
+            evict = evictionPolicy.evict(evictionConfig, underTest,
+                    poolMap.get(evictionKey).getIdleObjects().size());
+        } catch (final Throwable t) {
+            PoolUtils.checkRethrow(t);
+            swallowException(new Exception(t));
+            evict = false;
+        }
+        return evict;
+    }
+
+    private void handleNonEvictedObject(PooledObject<T> underTest, Deque<PooledObject<T>> idleObjects) throws E {
+        if (getTestWhileIdle()) {
+            boolean active = false;
+            try {
+                factory.activateObject(evictionKey, underTest);
+                active = true;
+            } catch (final Exception e) {
+                destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
+                destroyedByEvictorCount.incrementAndGet();
+            }
+            if (active) {
+                boolean validate = false;
+                Throwable validationThrowable = null;
+                try {
+                    validate = factory.validateObject(evictionKey, underTest);
+                } catch (final Throwable t) {
+                    PoolUtils.checkRethrow(t);
+                    validationThrowable = t;
+                }
+                if (!validate) {
+                    destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
+                    destroyedByEvictorCount.incrementAndGet();
+                    if (validationThrowable != null) {
+                        if (validationThrowable instanceof RuntimeException) {
+                            throw (RuntimeException) validationThrowable;
+                        }
+                        throw (Error) validationThrowable;
+                    }
+                } else {
+                    try {
+                        factory.passivateObject(evictionKey, underTest);
+                    } catch (final Exception e) {
+                        destroy(evictionKey, underTest, true, DestroyMode.NORMAL);
+                        destroyedByEvictorCount.incrementAndGet();
+                    }
+                }
+            }
+        }
+        underTest.endEvictionTest(idleObjects);
+    }
+
+    private void handleAbandonedConfig() {
         final AbandonedConfig ac = this.abandonedConfig;
         if (ac != null && ac.getRemoveAbandonedOnMaintenance()) {
             removeAbandoned(ac);
