@@ -642,8 +642,9 @@ public class GenericObjectPool<T, E extends Exception> extends BaseGenericObject
      * @param always true means create instances even if the pool has no threads waiting
      * @throws E if the factory's makeObject throws
      */
+
     private void ensureIdle(final int idleCount, final boolean always) throws E {
-        if (idleCount < 1 || isClosed() || !always && !idleObjects.hasTakeWaiters()) {
+        if (idleCount < 1 || isClosed() || (!always && !idleObjects.hasTakeWaiters())) {
             return;
         }
 
@@ -660,6 +661,7 @@ public class GenericObjectPool<T, E extends Exception> extends BaseGenericObject
                 idleObjects.addLast(p);
             }
         }
+
         if (isClosed()) {
             // Pool closed while object was being added to idle objects.
             // Make sure the returned object is destroyed rather than left
