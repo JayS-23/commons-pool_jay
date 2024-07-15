@@ -53,7 +53,7 @@ public class MethodCallPoolableObjectFactory implements PooledObjectFactory<Obje
         }
     }
 
-    public int getCurrentCount() {
+    private int getCurrentCount() {
         return count;
     }
 
@@ -61,27 +61,27 @@ public class MethodCallPoolableObjectFactory implements PooledObjectFactory<Obje
         return methodCalls;
     }
 
-    public boolean isActivateObjectFail() {
+    private boolean isActivateObjectFail() {
         return activateObjectFail;
     }
 
-    public boolean isDestroyObjectFail() {
+    private boolean isDestroyObjectFail() {
         return destroyObjectFail;
     }
 
-    public boolean isMakeObjectFail() {
+    private boolean isMakeObjectFail() {
         return makeObjectFail;
     }
 
-    public boolean isPassivateObjectFail() {
+    private boolean isPassivateObjectFail() {
         return passivateObjectFail;
     }
 
-    public boolean isValid() {
+    private boolean isValid() {
         return valid;
     }
 
-    public boolean isValidateObjectFail() {
+    private boolean isValidateObjectFail() {
         return validateObjectFail;
     }
 
@@ -122,7 +122,7 @@ public class MethodCallPoolableObjectFactory implements PooledObjectFactory<Obje
         this.activateObjectFail = activateObjectFail;
     }
 
-    public void setCurrentCount(final int count) {
+    private void setCurrentCount(final int count) {
         this.count = count;
     }
 
